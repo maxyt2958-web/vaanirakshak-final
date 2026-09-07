@@ -14,6 +14,24 @@ import ScrollyVideoCanvas from "./components/ScrollyVideoCanvas";
 
 type RiskAction = "ALLOW" | "CHALLENGE" | "BLOCK";
 
+/**
+ * Wire format emitted by the Python backend
+ * (`vanirakshak-backend/vanirakshak/server/app.py` → `WS /v1/stream`).
+ * Normalised into `AnalysisResult` by `normalizeResult()`.
+ * See docs/PROTOCOL.md for the full contract.
+ */
+type BackendResult = {
+  timestamp_ms?: number;
+  risk_score?: number;
+  p_spoof?: number;
+  tier?: string;
+  metrics?: Record<string, unknown>;
+  trigger_challenge?: boolean;
+  interlock_active?: boolean;
+  receipt_hash?: string;
+  challenge?: { phrase?: string } | null;
+};
+
 type AnalysisResult = {
   session_id?: string;
   window_index?: number;
@@ -24,7 +42,32 @@ type AnalysisResult = {
   speaker_similarity: number;
   snr_db: number;
   challenge_phrase?: string | null;
+  /** Server-authoritative lock. The client must not override this. */
+  interlock_active: boolean;
 };
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/** Map the backend payload onto the shape the dashboard renders. */
+function normalizeResult(raw: BackendResult): AnalysisResult {
+  const metrics = raw.metrics ?? {};
+  const tier = raw?.tier;
+
+  return {
+    risk_score: asNumber(raw.risk_score),
+    action:
+      tier === "ALLOW" || tier === "CHALLENGE" || tier === "BLOCK"
+        ? tier
+        : "ALLOW",
+    spoof_score: asNumber(raw.p_spoof),
+    speaker_similarity: asNumber(metrics.asv_consistency, 1),
+    snr_db: asNumber(metrics.snr_db),
+    challenge_phrase: raw.challenge?.phrase ?? null,
+    interlock_active: raw.interlock_active === true,
+  };
+}
 
 type EventLog = {
   id: number;
@@ -33,7 +76,8 @@ type EventLog = {
   severity: "info" | "warning" | "critical";
 };
 
-const BACKEND_WS = "ws://localhost:8000/ws/stream";
+const BACKEND_WS =
+  process.env.NEXT_PUBLIC_BACKEND_WS ?? "ws://localhost:8000/ws/stream";
 
 export default function Home() {
   const [connected, setConnected] = useState(false);
@@ -50,15 +94,21 @@ export default function Home() {
   const [events, setEvents] = useState<EventLog[]>([]);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
+  const [interlockActive, setInterlockActive] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const mutedGainRef = useRef<GainNode | null>(null);
 
   const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const transactionLocked = action === "BLOCK" || risk >= 70;
+  // The backend owns the interlock decision. Local thresholds are only a
+  // fallback for demo mode, where no server is involved.
+  const transactionLocked =
+    interlockActive || action === "BLOCK" || risk >= 70;
 
   const riskLabel = useMemo(() => {
     if (risk >= 70) return "CRITICAL";
@@ -88,6 +138,7 @@ export default function Home() {
     setSpeakerSimilarity(result.speaker_similarity);
     setSnr(result.snr_db);
     setChallenge(result.challenge_phrase ?? null);
+    setInterlockActive(result.interlock_active);
 
     if (result.action === "BLOCK") {
       setAlertMessage("CRITICAL ALERT • Transaction blocked");
@@ -130,13 +181,29 @@ export default function Home() {
       setConnected(true);
       setDemoMode(false);
       addEvent("Connected to VaniRakshak backend", "info");
+
+      // The backend expects a JSON text handshake before any audio frames.
+      // Without it the server closes the socket with 1003 and no audio is
+      // ever analysed. See docs/PROTOCOL.md.
+      ws.send(
+        JSON.stringify({
+          session_id: sessionId,
+          sample_rate: 16000,
+          caller_id: "",
+          claimed_identity: "",
+          transaction_value_inr: 0,
+          origin_country: "IN",
+          prior_fraud_score: 0,
+        })
+      );
+
       startMicrophone(ws);
     };
 
     ws.onmessage = (message) => {
       try {
-        const result: AnalysisResult = JSON.parse(message.data);
-        applyResult(result);
+        const raw: BackendResult = JSON.parse(message.data);
+        applyResult(normalizeResult(raw));
       } catch {
         addEvent("Received an invalid backend message", "warning");
       }
@@ -178,16 +245,25 @@ export default function Home() {
 
         audioContextRef.current = audioContext;
 
+        // AudioWorklet replaces the deprecated ScriptProcessorNode.
+        await audioContext.audioWorklet.addModule("/worklets/pcm-capture.js");
+
         const source = audioContext.createMediaStreamSource(stream);
+        const workletNode = new AudioWorkletNode(audioContext, "pcm-capture");
 
-        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+        // Kept in the graph so the worklet is pulled, but muted so the
+        // microphone is never echoed back through the speakers.
+        const mutedGain = audioContext.createGain();
+        mutedGain.gain.value = 0;
 
-        processorRef.current = processor;
+        sourceRef.current = source;
+        workletNodeRef.current = workletNode;
+        mutedGainRef.current = mutedGain;
 
-        processor.onaudioprocess = (event) => {
+        workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
           if (ws.readyState !== WebSocket.OPEN) return;
 
-          const input = event.inputBuffer.getChannelData(0);
+          const input = event.data;
 
           let sum = 0;
 
@@ -208,8 +284,9 @@ export default function Home() {
           ws.send(pcm.buffer);
         };
 
-        source.connect(processor);
-        processor.connect(audioContext.destination);
+        source.connect(workletNode);
+        workletNode.connect(mutedGain);
+        mutedGain.connect(audioContext.destination);
 
         addEvent("Microphone streaming started", "info");
         setMicLive(true);
@@ -220,8 +297,14 @@ export default function Home() {
   }
 
   function disconnect() {
-    processorRef.current?.disconnect();
-    processorRef.current = null;
+    workletNodeRef.current?.disconnect();
+    workletNodeRef.current = null;
+
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
+
+    mutedGainRef.current?.disconnect();
+    mutedGainRef.current = null;
 
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
@@ -253,6 +336,7 @@ export default function Home() {
         speaker_similarity: 0.91,
         snr_db: 29,
         challenge_phrase: null,
+        interlock_active: false,
       },
       {
         risk_score: 43,
@@ -261,6 +345,7 @@ export default function Home() {
         speaker_similarity: 0.68,
         snr_db: 18,
         challenge_phrase: "Say: Mango 8 nadi 4 blue",
+        interlock_active: false,
       },
       {
         risk_score: 87,
@@ -269,6 +354,7 @@ export default function Home() {
         speaker_similarity: 0.38,
         snr_db: 11,
         challenge_phrase: null,
+        interlock_active: true,
       },
     ];
 
@@ -502,7 +588,7 @@ export default function Home() {
                   {connected
                     ? "MIC LIVE"
                     : demoMode
-                      ? "DEMO"
+                      ? "DEMO · SIMULATED"
                       : "STANDBY"}
                 </span>
               </div>

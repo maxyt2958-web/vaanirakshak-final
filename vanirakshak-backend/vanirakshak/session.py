@@ -160,6 +160,7 @@ class CallSession:
                 "asv_consistency": wr.asv_score,
                 "channel_anomaly": wr.channel_anomaly,
                 "prosody_unnatural": wr.prosody_unnatural,
+                "snr_db": wr.snr_db,
             },
             trigger_challenge=trigger,
             interlock_active=self._blocked,

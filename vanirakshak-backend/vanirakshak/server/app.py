@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -42,6 +43,26 @@ app = FastAPI(
 # replaced with a proper dependency-injected pool keyed by tenant.
 SESSIONS: Dict[str, CallSession] = {}
 AUDIT = AuditLog(max_events=10_000)
+
+# Browser dashboard runs on a different origin (localhost:3001 by default).
+# Origins are configurable via VR_CORS_ORIGINS (comma-separated).
+_cors_origins = [
+    o.strip()
+    for o in getattr(
+        settings.server,
+        "cors_origins",
+        "http://localhost:3001,http://127.0.0.1:3001",
+    ).split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _read_wav_bytes(data: bytes) -> tuple[np.ndarray, int]:
@@ -207,6 +228,7 @@ def tail_audit(n: int = 50) -> dict:
 
 
 @app.websocket("/v1/stream")
+@app.websocket("/ws/stream")
 async def stream_endpoint(ws: WebSocket) -> None:
     await ws.accept()
     # first message: JSON handshake

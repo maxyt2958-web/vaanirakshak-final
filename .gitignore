@@ -59,3 +59,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local agent working notes (not part of the project)
+.workbuddy-ai/

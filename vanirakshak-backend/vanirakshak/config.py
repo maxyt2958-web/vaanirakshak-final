@@ -80,6 +80,11 @@ _DEMO_OVERRIDES = {
 class ServerConfig:
     host: str = _env("VR_HOST", "127.0.0.1")
     port: int = _env_int("VR_PORT", 8000)
+    # Comma-separated allowlist for browser dashboard origins.
+    cors_origins: str = _env(
+        "VR_CORS_ORIGINS",
+        "http://localhost:3001,http://127.0.0.1:3001",
+    )
 
 
 @dataclass(frozen=True)
