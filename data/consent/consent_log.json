@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2026-09-07T11:04:45Z",
+    "session_id": "enroll-34e025fa760a",
+    "speaker_id": "narendra_modi",
+    "action": "SPEAKER_ANCHOR_ENROLLMENT",
+    "audio_sha256": "b61a178dc7254215e1a985a4d489211b9337a2cae97c06eef8553d7d38bc505a",
+    "embedding_sha256": "22e26aaa09572ec52f14d97dd8b64dffb6bb1b743a46d64e3aa9ad2aa421e4bd",
+    "receipt_hash": "40329c27fef5f0579423195c608b3e44316bf04c9f4a3bbddf3a2aa872a8d36e",
+    "compliance": "DPDP_ACT_2023_SECTION_8_7"
+  }
+]
