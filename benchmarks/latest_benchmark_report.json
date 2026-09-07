@@ -1,6 +1,6 @@
 {
-  "timestamp_iso": "2026-09-07T19:16:06Z",
-  "total_benchmark_duration_sec": 19.8,
+  "timestamp_iso": "2026-09-07T19:31:20Z",
+  "total_benchmark_duration_sec": 9.95,
   "asvspoof5": {
     "min_dcf": 0.0,
     "act_dcf": 18.999999999999996,
@@ -15,10 +15,10 @@
     "threshold_actdcf": 0.5
   },
   "latency_sla": {
-    "p50_ms": 18.63365000099293,
-    "p95_ms": 22.7791450024597,
-    "p99_ms": 23.995232999004653,
-    "mean_ms": 19.055122999925516,
+    "p50_ms": 9.510472998954356,
+    "p95_ms": 9.931287298059033,
+    "p99_ms": 10.393009749859626,
+    "mean_ms": 9.515012090050732,
     "sla_threshold_p95_ms": 200.0,
     "compliant": true
   },
