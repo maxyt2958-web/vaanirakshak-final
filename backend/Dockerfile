@@ -1,9 +1,10 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /workspace
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . ./backend
 
 EXPOSE 8000
 

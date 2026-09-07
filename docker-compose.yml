@@ -19,6 +19,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_WS=ws://localhost:8000/ws/stream
     ports:
       - "3001:3001"
     environment:

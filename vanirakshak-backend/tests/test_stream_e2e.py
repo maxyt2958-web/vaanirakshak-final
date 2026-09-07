@@ -85,6 +85,14 @@ def test_websocket_stream_e2e() -> None:
     assert isinstance(verdict.get("risk_score"), (int, float))
     assert isinstance(verdict.get("p_spoof"), (int, float))
     assert isinstance(verdict.get("interlock_active"), bool)
+    assert "receipt_hash" in verdict, "receipt_hash missing from verdict"
+    assert "timestamp_ms" in verdict, "timestamp_ms missing from verdict"
+
+    # Protocol enforcement check: binary frame before handshake must be closed with 1003
+    with client.websocket_connect("/ws/stream") as ws_bad:
+        ws_bad.send_bytes(chunk)
+        close_msg = ws_bad.receive()
+        assert close_msg.get("type") == "websocket.close" and close_msg.get("code") == 1003
 
 
 def main() -> int:

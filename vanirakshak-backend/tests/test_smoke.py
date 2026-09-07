@@ -203,12 +203,23 @@ def test_route_aliases() -> None:
     r2 = client.get("/api/v1/health")
     assert_(r1.status_code == 200, f"/v1/health status {r1.status_code}")
     assert_(r2.status_code == 200, f"/api/v1/health status {r2.status_code}")
-    assert_(r1.json() == r2.json(), "/v1/health and /api/v1/health payloads differ")
+    assert_(r1.json() == r2.json(), "/v1/health and /api/v1/health payloads match")
 
     r3 = client.get("/v1/audit")
     r4 = client.get("/api/v1/audit")
     assert_(r3.status_code == 200, f"/v1/audit status {r3.status_code}")
     assert_(r4.status_code == 200, f"/api/v1/audit status {r4.status_code}")
+    assert_(r3.json()["chain_valid"] == r4.json()["chain_valid"], "/v1/audit and /api/v1/audit chain_valid match")
+
+    r5 = client.post("/v1/sessions", json={"caller_id": "smoke-test", "claimed_identity": "alice"})
+    r6 = client.post("/api/v1/sessions", json={"caller_id": "smoke-test", "claimed_identity": "alice"})
+    assert_(r5.status_code == 200, f"/v1/sessions status {r5.status_code}")
+    assert_(r6.status_code == 200, f"/api/v1/sessions status {r6.status_code}")
+    assert_("session_id" in r5.json() and "session_id" in r6.json(), "session endpoints returned session_id")
+
+    with client.websocket_connect("/api/v1/stream") as ws:
+        ws.send_text('{"session_id":"alias-test","sample_rate":16000}')
+    assert_(True, "/api/v1/stream websocket handshake succeeds")
 
 
 def main() -> int:

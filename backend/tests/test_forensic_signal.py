@@ -17,16 +17,22 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import numpy as np
-import soundfile as sf
-import torch
+try:
+    import numpy as np
+    import soundfile as sf
+    import torch
 
-from backend.app.core.audio import AudioProcessor, compute_audio_sha256
-from backend.app.core.forensic_signal import ForensicSignalProcessor
-from backend.app.engine.risk_fusion import ForensicRiskFusionEngine
-from backend.app.engine.schemas import WindowAnalysisResult
+    from backend.app.core.audio import AudioProcessor, compute_audio_sha256
+    from backend.app.core.forensic_signal import ForensicSignalProcessor
+    from backend.app.engine.risk_fusion import ForensicRiskFusionEngine
+    from backend.app.engine.schemas import WindowAnalysisResult
+
+    HAS_DEPS = True
+except ImportError:
+    HAS_DEPS = False
 
 
+@unittest.skipUnless(HAS_DEPS, "Heavy deep learning dependencies (torch, soundfile) not installed in current environment")
 class TestForensicSignalProcessing(unittest.TestCase):
     """Test suite for ForensicSignalProcessor and AudioProcessor."""
 
