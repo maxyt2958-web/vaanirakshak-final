@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from ..config import settings
 from ..session import CallSession, SessionContext
 from ..privacy.audit import AuditLog
+from ..alerts import AlertDispatcher, build_alert_payload
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ app = FastAPI(
 # replaced with a proper dependency-injected pool keyed by tenant.
 SESSIONS: Dict[str, CallSession] = {}
 AUDIT = AuditLog(max_events=10_000)
+ALERTS = AlertDispatcher()
 
 # Browser dashboard runs on a different origin (localhost:3001 by default).
 # Origins are configurable via VR_CORS_ORIGINS (comma-separated).
@@ -278,5 +280,23 @@ async def stream_endpoint(ws: WebSocket) -> None:
                     "receipt_hash": result.receipt_hash,
                     "challenge": result.challenge,
                 })
+
+                # Server-side alerting on challenge / block. Best-effort:
+                # a delivery failure must not break the stream.
+                if result.trigger_challenge or result.interlock_active:
+                    ALERTS.dispatch(
+                        build_alert_payload(
+                            session_id=sid,
+                            risk=result.risk,
+                            tier=result.tier,
+                            interlock_active=result.interlock_active,
+                            receipt_hash=result.receipt_hash,
+                            challenge_phrase=(
+                                (result.challenge or {}).get("phrase")
+                                if isinstance(result.challenge, dict)
+                                else None
+                            ),
+                        )
+                    )
     except WebSocketDisconnect:
         return

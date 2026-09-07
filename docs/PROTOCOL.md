@@ -93,7 +93,27 @@ The **server owns the decision**. The local thresholds exist only so demo mode
 (which has no server) can still exercise the UI. A future change should make
 the server the sole authority and drop the client-side thresholds.
 
-## 6. Environment
+## 6. Reconnect
+
+On `onclose` the client retries unless the close was deliberate
+(`manualCloseRef`). Policy: **5 attempts**, exponential backoff —
+1 s → 2 s → 4 s → 8 s → 15 s (cap), each with random jitter. After
+`MAX_RECONNECT_ATTEMPTS` the client gives up, logs the failure, and requires a
+manual restart.
+
+A reconnect starts a **new session**: the server has already discarded the old
+call state, so the client must re-send the handshake exactly as in §1 before
+streaming audio again. Do not resume mid-stream.
+
+## 7. Alerting (server → webhook)
+
+When a verdict has `trigger_challenge` or `interlock_active`, the backend POSTs
+an alert via `vanirakshak/alerts/`. This is server-side on purpose — the browser
+must never hold gateway credentials, and a client-reported interlock can be
+forged. Not part of the socket contract; the client only ever *displays* the
+alert payload it already received.
+
+## 8. Environment
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -101,3 +121,17 @@ the server the sole authority and drop the client-side thresholds.
 | `VR_PORT` | `8000` | Backend listen port |
 | `VR_HOST` | `127.0.0.1` | Backend bind host |
 | `VR_CORS_ORIGINS` | `http://localhost:3001,http://127.0.0.1:3001` | Browser origins allowed by CORS |
+| `VR_ALERT_WEBHOOK_URL` | *(unset)* | Alert webhook target; unset disables dispatch |
+
+## 9. Conformance test
+
+`vanirakshak-backend/tests/test_stream_e2e.py` replays exactly what the
+dashboard does — handshake, then int16 PCM — and asserts that every verdict
+carries `risk_score`, `p_spoof`, `tier`, `metrics`, `interlock_active` plus
+`metrics.asv_consistency` and `metrics.snr_db`. Run it after changing either
+side of this contract:
+
+```bash
+python -m uvicorn vanirakshak.server.app:app --port 8000 &
+python vanirakshak-backend/tests/test_stream_e2e.py
+```
