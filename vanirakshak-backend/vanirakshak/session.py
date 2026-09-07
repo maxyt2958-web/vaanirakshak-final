@@ -1,0 +1,191 @@
+"""Session orchestrator.
+
+A :class:`CallSession` is the single per-call state container: it owns
+the audio buffer, the detection pipeline, the risk fusion engine, the
+challenge engine, the audit log, and exposes a single
+:meth:`CallSession.push_chunk` that the WebSocket / REST endpoints call.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+
+import numpy as np
+
+from .config import AudioConfig, RiskConfig, FusionConfig, settings
+from .privacy.audit import AuditLog
+from .privacy.buffer import SlidingAudioBuffer
+from .detectors.pipeline import DetectionPipeline
+from .risk.fusion import RiskFusionEngine, RiskDecision
+from .challenge.engine import ChallengeEngine, Challenge
+
+
+@dataclass
+class SessionContext:
+    caller_id: str = ""
+    claimed_identity: str = ""
+    transaction_value_inr: float = 0.0
+    origin_country: str = "IN"
+    prior_fraud_score: float = 0.0  # 0-1, comes from CRM
+    metadata: Dict[str, str] = field(default_factory=dict)
+
+    def risk_weight(self) -> float:
+        w = 0.0
+        if self.origin_country and self.origin_country not in ("IN", "USA", "UK", "SG"):
+            w += 0.4
+        if self.transaction_value_inr >= 1_00_000:  # ≥ ₹1 lakh
+            w += 0.5
+        elif self.transaction_value_inr >= 10_000:  # ≥ ₹10k
+            w += 0.2
+        w += 0.8 * max(0.0, min(1.0, self.prior_fraud_score))
+        return float(min(1.0, w))
+
+
+@dataclass
+class ChunkResult:
+    timestamp_ms: int
+    risk: float
+    p_spoof: float
+    tier: str
+    metrics: Dict[str, object]
+    trigger_challenge: bool
+    interlock_active: bool
+    receipt_hash: str
+    challenge: Optional[dict] = None  # only present the first time a challenge fires
+
+
+class CallSession:
+    """Per-call stateful orchestrator."""
+
+    def __init__(
+        self,
+        session_id: str,
+        context: SessionContext,
+        *,
+        audio_cfg: Optional[AudioConfig] = None,
+        risk_cfg: Optional[RiskConfig] = None,
+        fusion_cfg: Optional[FusionConfig] = None,
+        pipeline: Optional[DetectionPipeline] = None,
+        fusion_engine: Optional[RiskFusionEngine] = None,
+        challenge_engine: Optional[ChallengeEngine] = None,
+        audit: Optional[AuditLog] = None,
+    ) -> None:
+        self.session_id = session_id
+        self.context = context
+        self.buffer = SlidingAudioBuffer(audio_cfg or settings.audio)
+        self.pipeline = pipeline or DetectionPipeline()
+        self.fusion = fusion_engine or RiskFusionEngine(risk_cfg or settings.risk, fusion_cfg or settings.fusion)
+        self.challenge = challenge_engine or ChallengeEngine()
+        self.audit = audit or AuditLog()
+        self._active_challenge: Optional[Challenge] = None
+        self._history: List[ChunkResult] = []
+        self._triggered_challenge = False
+        self._challenge_passed = False
+        self._blocked = False
+        self._sr = settings.audio.sample_rate
+
+    @property
+    def blocked(self) -> bool:
+        return self._blocked
+
+    @property
+    def sr(self) -> int:
+        return self._sr
+
+    def set_sample_rate(self, sr: int) -> None:
+        if sr != self._sr:
+            self._sr = sr
+            # re-create buffer with new rate
+            cfg = AudioConfig(sample_rate=sr, window_seconds=settings.audio.window_seconds, hop_seconds=settings.audio.hop_seconds)
+            self.buffer = SlidingAudioBuffer(cfg)
+
+    def enrol(self, user_id: str, audio: np.ndarray, sr: Optional[int] = None) -> np.ndarray:
+        sr = sr or self._sr
+        return self.pipeline.enrol(user_id, audio, sr)
+
+    def is_enrolled(self, user_id: str) -> bool:
+        return self.pipeline.is_enrolled(user_id)
+
+    def push_chunk(self, pcm: np.ndarray) -> Optional[ChunkResult]:
+        """Push a chunk of int16 / float32 mono PCM. Returns a result
+        once a new hop-window has accumulated, else None.
+        """
+        ready = self.buffer.push(pcm)
+        if not ready:
+            return None
+        window = self.buffer.read_window()
+        if window is None:
+            return None
+
+        # detection
+        wr = self.pipeline.analyse(
+            window.astype(np.float32) / 32768.0,
+            self._sr,
+            claimed_user=self.context.claimed_identity or None,
+        )
+        # fuse
+        decision = self.fusion.update(wr, context_risk=self.context.risk_weight())
+
+        # challenge logic
+        trigger = False
+        if (not self._triggered_challenge) and decision.tier == "CHALLENGE":
+            ch = self.challenge.issue(lang="mixed")
+            self._active_challenge = ch
+            self._triggered_challenge = True
+            trigger = True
+
+        # block logic: if BLOCK, latch
+        if decision.tier == "BLOCK":
+            self._blocked = True
+
+        ev = self.audit.append(
+            session_id=self.session_id,
+            caller_id=self.context.caller_id,
+            claimed_identity=self.context.claimed_identity,
+            risk_score=decision.risk,
+            tier=decision.tier,
+            features=decision.features,
+        )
+
+        cr = ChunkResult(
+            timestamp_ms=int(time.time() * 1000),
+            risk=decision.risk,
+            p_spoof=decision.p_spoof,
+            tier=decision.tier,
+            metrics={
+                "cm_score": wr.cm_score,
+                "cm_genuine_prob": wr.features.get("cm_genuine_prob", 0.5),
+                "asv_consistency": wr.asv_score,
+                "channel_anomaly": wr.channel_anomaly,
+                "prosody_unnatural": wr.prosody_unnatural,
+            },
+            trigger_challenge=trigger,
+            interlock_active=self._blocked,
+            receipt_hash=ev.receipt_hash,
+            challenge=self._active_challenge.to_dict() if (trigger and self._active_challenge is not None) else None,
+        )
+        cr.metrics["codec_guess"] = wr.codec_guess
+        self._history.append(cr)
+        return cr
+
+    def grade_challenge(self, response_text: str, response_latency_ms: int) -> dict:
+        if self._active_challenge is None:
+            return {"ok": False, "reason": "no_active_challenge"}
+        passed, reason, conf = self.challenge.grade(self._active_challenge, response_text, response_latency_ms)
+        if passed:
+            self._challenge_passed = True
+        else:
+            # failed challenge => escalate to BLOCK
+            self._blocked = True
+        return {
+            "ok": passed,
+            "reason": reason,
+            "confidence": conf,
+            "blocked": self._blocked,
+        }
+
+    @property
+    def history(self) -> List[ChunkResult]:
+        return list(self._history)
