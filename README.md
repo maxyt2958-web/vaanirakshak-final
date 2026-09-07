@@ -70,8 +70,11 @@ The landing experience is a scroll-driven canvas animation (220 pre-rendered fra
 │       ├── layout.tsx
 │       ├── globals.css
 │       └── components/
-│           ├── ScrollyVideoCanvas.tsx   # scroll-driven animated pipeline explainer
-│           └── ...                      # placeholder stubs (not yet implemented)
+│           ├── ScrollyVideoCanvas.tsx       # scroll-driven animated pipeline explainer
+│           ├── ForensicVerdictCard.tsx      # threat verdict card & DPDP audit certificate
+│           ├── WaveformEvidenceTimeline.tsx # sliding-window waveform & boundary inspector
+│           ├── DemoQuickSelector.tsx        # standardized forensic benchmark selector
+│           └── AudioUploadZone.tsx          # custom audio drag-and-drop ingestion
 └── vanirakshak-backend/  # Python FastAPI forensic service
     └── vanirakshak/
         ├── server/app.py       # REST + WebSocket endpoints
@@ -105,11 +108,13 @@ npm install --prefix frontend
 npm run dev
 ```
 
-Open **http://localhost:3001** and click the status badge to start streaming.
+Open **http://localhost:3001** to access the forensic console.
 
-With no backend reachable, the UI falls back to **Demo mode**, which cycles three
-canned verdicts (risk 18 / 43 / 87) every 4 seconds. Demo results are labelled
-`DEMO · SIMULATED` — they are not real detections.
+The dashboard provides:
+* **Standardized Forensic Benchmark Suite** (`demo_01_genuine.wav` through `demo_04_impostor.wav`) for one-click threat evaluation.
+* **Custom Audio Ingestion Zone** for drag-and-drop WAV analysis.
+* **Live 16 kHz Microphone Streaming** with real-time risk scoring, vocoder discontinuity detection, and autonomous transaction interlocks.
+* **Cryptographic DPDP Act 2023 Audit Certificates** exportable directly from the console.
 
 ### Configuration
 
