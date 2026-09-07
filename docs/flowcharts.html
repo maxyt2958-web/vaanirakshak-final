@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VaniRakshak - Verified Mermaid 10.9.8 Flowcharts</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.8/dist/mermaid.min.js"></script>
+<style>
+  body { background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; margin:0; padding:24px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .sub { color:#9da7b3; margin:0 0 20px; }
+  .card { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:18px; margin:18px 0; overflow:auto; }
+  .card h2 { color:#58a6ff; font-size:16px; margin:0 0 14px; }
+  .mermaid { min-width:900px; display:flex; justify-content:center; }
+  .status { color:#3fb950; font-weight:600; }
+</style>
+</head>
+<body>
+<h1>VaniRakshak - Corrected Architecture Flowcharts</h1>
+<p class="sub"><span class="status">Mermaid 10.9.8-compatible syntax.</span> All node labels are quoted; parser-sensitive parentheses and junction shorthand were removed.</p>
+
+<section class="card">
+<h2>Flowchart 1 - Real-Time Inference / Detection Pipeline</h2>
+<pre class="mermaid">
+flowchart TD
+    subgraph Client["Client - User Device"]
+        A["User starts call or live mic stream"]
+        B["AudioWorklet PCM capture<br/>16-bit mono PCM at 16 kHz<br/>Web Audio API"]
+    end
+    A --> B
+
+    subgraph Ingest["Ingestion and Streaming"]
+        C["JSON handshake<br/>session and call context"]
+        D["Binary PCM frames<br/>WebSocket ws stream endpoint"]
+        E["RAM-only sliding buffer<br/>raw audio is not persisted"]
+    end
+    B --> C
+    C --> D
+    D --> E
+
+    subgraph Score["Multi-Layer Forensic Scoring"]
+        F["CM anti-spoofing<br/>AASIST stub<br/>CM score and genuine probability"]
+        G["ASV speaker verification<br/>ECAPA-TDNN stub<br/>similarity to claimed identity"]
+        H["Channel and codec detector<br/>channel anomaly, codec and SNR"]
+        I["Prosody detector<br/>pitch jitter and micro-tremor"]
+    end
+    E --> F
+    E --> G
+    E --> H
+    E --> I
+
+    subgraph Fusion["Calibrated Risk Fusion"]
+        J["Evidence vector<br/>CM spoof, ASV mismatch,<br/>prosody, channel and context"]
+        K["Bayesian sigmoid fusion<br/>EMA smoothing and fast-rise override"]
+        L["Risk score from 0 to 100<br/>ALLOW, CHALLENGE or BLOCK"]
+    end
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    J --> K
+    K --> L
+
+    subgraph Decision["Decision and Autonomous Interlock"]
+        M{"Risk tier"}
+        N1["LOW RISK<br/>risk below 35"]
+        N2["SUSPICIOUS<br/>risk from 35 to 69"]
+        N3["CRITICAL<br/>risk at least 70"]
+        O1["ALLOW<br/>transaction proceeds"]
+        O2["CHALLENGE<br/>issue a dynamic phrase"]
+        P2["Grade response<br/>digit order and latency"]
+        O3["BLOCK<br/>engage transaction interlock"]
+    end
+    L --> M
+    M --> N1
+    N1 --> O1
+    M --> N2
+    N2 --> O2
+    O2 --> P2
+    P2 -->|Pass| O1
+    P2 -->|Fail| O3
+    M --> N3
+    N3 --> O3
+
+    subgraph Audit["Audit and Privacy"]
+        Q["SHA-256 audit receipt<br/>append-only hash chain"]
+        R["Alerting stub<br/>webhook and email planned"]
+    end
+    O1 --> Q
+    O2 --> Q
+    O3 --> Q
+    Q --> R
+</pre>
+</section>
+
+<section class="card">
+<h2>Flowchart 2 - Data Synthesis, Training-Prep and Evaluation Pipeline</h2>
+<pre class="mermaid">
+flowchart TD
+    subgraph Data["Honest Synthetic Data"]
+        A1["Synthetic genuine speech<br/>broadband and jittered pitch"]
+        A2["Synthetic spoofed speech<br/>vocoded and low-pass cues"]
+        A3["Synthetic silence"]
+        A4["Speaker enrolment audio<br/>reference identity embedding"]
+        B["Labelled synthetic corpus<br/>genuine, spoofed and silence"]
+    end
+    A1 --> B
+    A2 --> B
+    A3 --> B
+
+    subgraph Aug["Telephony Augmentation"]
+        C1["G.711 A-law and mu-law"]
+        C2["AMR-WB and GSM-EFR simulation"]
+        C3["Noise and babble augmentation"]
+        C4["Room impulse response"]
+        C5["Random gain"]
+        D["Augmented evaluation set"]
+    end
+    B --> C1
+    B --> C2
+    B --> C3
+    B --> C4
+    B --> C5
+    C1 --> D
+    C2 --> D
+    C3 --> D
+    C4 --> D
+    C5 --> D
+
+    subgraph Models["Detector Models"]
+        E1["CM anti-spoofing<br/>AASIST stub"]
+        E2["ASV speaker verification<br/>ECAPA-TDNN stub"]
+        E3["Channel and codec detector"]
+        E4["Prosody micro-tremor detector"]
+        E5["Calibrated Bayesian fusion<br/>sigmoid plus EMA"]
+    end
+    D --> E1
+    D --> E2
+    D --> E3
+    D --> E4
+    A4 --> E2
+    E1 --> E5
+    E2 --> E5
+    E3 --> E5
+    E4 --> E5
+
+    subgraph Eval["Honest Evaluation"]
+        F1["Detector and fused scores<br/>on synthetic augmented data"]
+        F2["ASVspoof metrics<br/>minDCF, actDCF, CLLR and EER"]
+        F3["Latency benchmark<br/>p50 and p95 per window"]
+    end
+    E5 --> F1
+    F1 --> F2
+    E5 --> F3
+
+    subgraph Monitor["Reporting and Future Updates"]
+        G1["Log risk, tier and features"]
+        G2["Review thresholds and fusion weights"]
+        G3["Report synthetic results honestly<br/>replace stubs before real claims"]
+    end
+    F2 --> G1
+    F3 --> G1
+    G1 --> G2
+    G2 --> G3
+    G3 -->|Future tuning| E5
+</pre>
+</section>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { htmlLabels: true, useMaxWidth: true } });
+</script>
+</body>
+</html>

@@ -19,6 +19,32 @@ Microphone  →  16-bit PCM @ 16 kHz  →  WebSocket /ws/stream  →  Forensic b
                                                     ALLOW / CHALLENGE / BLOCK
 ```
 
+### ML-side architecture
+
+VaniRakshak analyzes the raw waveform directly. It does **not** use speech-to-text,
+NER, BERT, emotion classification, or LLM-RAG. The current AASIST and ECAPA-TDNN
+components are deterministic synthetic stubs with documented replacement points for
+real model weights.
+
+```mermaid
+flowchart LR
+    A["Raw 16 kHz PCM<br/>sliding audio window"] --> B["CM anti-spoofing<br/>AASIST stub"]
+    A --> C["ASV speaker verification<br/>ECAPA-TDNN stub"]
+    A --> D["Channel and codec detector"]
+    A --> E["Prosody micro-tremor detector"]
+    B --> B1["CM score and genuine probability"]
+    C --> C1["ASV consistency to claimed identity"]
+    D --> D1["Channel anomaly, codec and SNR"]
+    E --> E1["Prosody unnaturalness"]
+    B1 --> F["Calibrated Bayesian fusion<br/>sigmoid plus EMA"]
+    C1 --> F
+    D1 --> F
+    E1 --> F
+    G["Context risk<br/>country, value and prior fraud"] --> F
+    F --> H["Risk score from 0 to 100<br/>fast-rise override"]
+    H --> I{"ALLOW, CHALLENGE or BLOCK"}
+```
+
 | Risk score | Label | Action |
 |---|---|---|
 | `< 35` | LOW RISK | `ALLOW` — transaction proceeds |
