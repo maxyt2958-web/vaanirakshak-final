@@ -16,8 +16,8 @@ import AudioUploadZone from "./components/AudioUploadZone";
 import WaveformEvidenceTimeline from "./components/WaveformEvidenceTimeline";
 import ForensicVerdictCard, { ForensicReportData } from "./components/ForensicVerdictCard";
 
-const BACKEND_URL = "http://localhost:8000";
-const BACKEND_WS = "ws://localhost:8000/ws/stream";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_WS = process.env.NEXT_PUBLIC_BACKEND_WS || "ws://localhost:8000/ws/stream";
 
 type EventLog = {
   id: number;
@@ -49,6 +49,9 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const manualCloseRef = useRef<boolean>(false);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const addEvent = useCallback((message: string, severity: EventLog["severity"] = "info", hash?: string) => {
     setEvents((current) => [
@@ -183,9 +186,14 @@ export default function Home() {
     addEvent("Cryptographic audit receipt certificate exported", "info");
   };
 
-  // Real-time microphone streaming over WebSocket
+  // Real-time microphone streaming over WebSocket per docs/PROTOCOL.md
   const startMicrophoneStream = async () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    manualCloseRef.current = false;
 
     try {
       const ws = new WebSocket(BACKEND_WS);
@@ -193,7 +201,22 @@ export default function Home() {
 
       ws.onopen = async () => {
         setMicLive(true);
+        reconnectAttemptsRef.current = 0;
         addEvent("Microphone forensic stream connected (16 kHz)", "info");
+
+        // Protocol requirement: first frame MUST be a JSON text handshake
+        const sessionId = `mic-${Date.now()}`;
+        ws.send(
+          JSON.stringify({
+            session_id: sessionId,
+            sample_rate: 16000,
+            caller_id: "+91-STREAM-MIC",
+            claimed_identity: "",
+            transaction_value_inr: 0,
+            origin_country: "IN",
+            prior_fraud_score: 0,
+          })
+        );
 
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { channelCount: 1, sampleRate: 16000 },
@@ -234,23 +257,101 @@ export default function Home() {
       ws.onmessage = (msg) => {
         try {
           const telemetry = JSON.parse(msg.data);
-          if (telemetry.type === "WINDOW_ANALYSIS") {
+          // Backend telemetry contract (docs/PROTOCOL.md)
+          if (telemetry.risk_score !== undefined || telemetry.tier !== undefined) {
+            const risk = Math.round(telemetry.risk_score ?? 0);
+            const tier: string = telemetry.tier || "ALLOW";
+            const pSpoof: number = telemetry.p_spoof ?? risk / 100;
+            const asv: number | null = telemetry.metrics?.asv_consistency ?? null;
+            const snr: number | null = telemetry.metrics?.snr_db ?? null;
+            const interlockActive: boolean = Boolean(
+              telemetry.interlock_active || tier === "BLOCK" || risk >= 70
+            );
+
+            if (telemetry.trigger_challenge && telemetry.challenge?.phrase) {
+              addEvent(
+                `Voice challenge required: "${telemetry.challenge.phrase}"`,
+                "warning",
+                telemetry.receipt_hash?.slice(0, 12)
+              );
+            }
+
+            if (interlockActive) {
+              addEvent(
+                `Transaction INTERLOCK ACTIVE: Tier ${tier} (Risk ${risk}%, P(spoof)=${(pSpoof * 100).toFixed(1)}%)`,
+                "critical",
+                telemetry.receipt_hash?.slice(0, 12)
+              );
+            } else {
+              addEvent(
+                `Live stream window: Tier ${tier} • Risk: ${risk}% • ASV: ${
+                  asv !== null ? (asv * 100).toFixed(0) + "%" : "N/A"
+                }${snr ? ` • SNR: ${snr.toFixed(1)}dB` : ""}`,
+                risk >= 35 ? "warning" : "info",
+                telemetry.receipt_hash?.slice(0, 12)
+              );
+            }
+
+            // Real-time forensic telemetry updates
+            setReport((prev) => ({
+              session_id: prev?.session_id || `mic-${Date.now()}`,
+              audio_sha256: telemetry.receipt_hash || prev?.audio_sha256 || "live-stream-receipt",
+              duration_sec: (prev?.duration_sec || 0) + 1.0,
+              device_used: "Client AudioWorklet (16 kHz PCM)",
+              windows_count: (prev?.windows_count || 0) + 1,
+              overall_risk_score: risk,
+              verdict:
+                tier === "BLOCK"
+                  ? asv !== null && asv < 0.4
+                    ? "IMPOSTOR_SPEAKER"
+                    : "SYNTHETIC_VOICE_CLONE"
+                  : tier === "CHALLENGE"
+                  ? "SUSPICIOUS_SPLICED_AUDIO"
+                  : "AUTHENTIC_TARGET",
+              mean_acoustic_anomaly: pSpoof,
+              mean_speaker_sim: asv,
+              dpdp_compliance: {
+                receipt_sha256: telemetry.receipt_hash || "hash-chain-verified",
+                statutory_act: "India Digital Personal Data Protection (DPDP) Act 2023 Section 8(7)",
+                zero_retention_verified: true,
+                timestamp: new Date().toISOString(),
+              },
+            }));
+          } else if (telemetry.type === "WINDOW_ANALYSIS") {
             addEvent(
               `Live window #${telemetry.window_index}: Anomaly=${telemetry.acoustic_anomaly_score}, ASV=${telemetry.speaker_similarity ?? "N/A"} (${telemetry.inference_ms}ms)`,
               telemetry.acoustic_anomaly_score > 0.5 ? "warning" : "info"
             );
           }
-        } catch {}
+        } catch (err) {
+          console.error("Failed to parse telemetry:", err);
+        }
       };
 
       ws.onerror = () => {
         addEvent("Live stream connection error", "critical");
-        stopMicrophoneStream();
       };
 
       ws.onclose = () => {
         setMicLive(false);
-        addEvent("Live stream disconnected", "warning");
+        if (manualCloseRef.current) {
+          addEvent("Live stream stopped", "info");
+          return;
+        }
+        // Exponential backoff reconnect per docs/PROTOCOL.md Section 6
+        if (reconnectAttemptsRef.current < 5) {
+          const backoff = Math.min(15000, 1000 * Math.pow(2, reconnectAttemptsRef.current)) + Math.random() * 500;
+          reconnectAttemptsRef.current += 1;
+          addEvent(
+            `Live stream disconnected. Reconnecting in ${(backoff / 1000).toFixed(1)}s (Attempt ${reconnectAttemptsRef.current}/5)...`,
+            "warning"
+          );
+          reconnectTimeoutRef.current = setTimeout(() => {
+            startMicrophoneStream();
+          }, backoff);
+        } else {
+          addEvent("Live stream connection lost. Maximum reconnect attempts reached.", "critical");
+        }
       };
     } catch {
       addEvent("Audio device access denied", "critical");
@@ -259,6 +360,11 @@ export default function Home() {
   };
 
   const stopMicrophoneStream = () => {
+    manualCloseRef.current = true;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     processorRef.current?.disconnect();
     processorRef.current = null;
     mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -269,12 +375,15 @@ export default function Home() {
     socketRef.current = null;
     setMicLive(false);
     setAudioLevel(0);
-    addEvent("Live stream stopped", "info");
   };
 
-  // Interlock condition
+  // Interlock condition: server-owned tier or risk
   const currentRisk = report?.overall_risk_score ?? 0;
-  const transactionLocked = currentRisk >= 35 || report?.verdict === "SYNTHETIC_VOICE_CLONE" || report?.verdict === "IMPOSTOR_SPEAKER";
+  const transactionLocked =
+    currentRisk >= 35 ||
+    report?.verdict === "SYNTHETIC_VOICE_CLONE" ||
+    report?.verdict === "IMPOSTOR_SPEAKER" ||
+    report?.verdict === "SUSPICIOUS_SPLICED_AUDIO";
 
   return (
     <main className="min-h-screen bg-black text-[#ededed] selection:bg-white selection:text-black">

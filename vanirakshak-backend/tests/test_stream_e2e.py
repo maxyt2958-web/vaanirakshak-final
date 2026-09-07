@@ -95,10 +95,77 @@ def test_websocket_stream_e2e() -> None:
         assert close_msg.get("type") == "websocket.close" and close_msg.get("code") == 1003
 
 
+def make_wav_bytes(seconds: float = 5.0, freq: float = 440.0) -> bytes:
+    """Generate in-memory mono 16-bit 16kHz WAV byte payload."""
+    import io
+    import wave
+
+    bio = io.BytesIO()
+    with wave.open(bio, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        frames = int(seconds * SAMPLE_RATE)
+        raw = b"".join(
+            struct.pack(
+                "<h",
+                int(8000 * math.sin(2 * math.pi * freq * (i / SAMPLE_RATE))),
+            )
+            for i in range(frames)
+        )
+        w.writeframes(raw)
+    return bio.getvalue()
+
+
+def test_rest_health_endpoint() -> None:
+    client = TestClient(app)
+    res = client.get("/api/v1/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data.get("ok") is True
+    assert "hardware" in data
+    assert "models" in data
+    assert data["hardware"].get("device_name")
+
+
+def test_rest_analyze_endpoint() -> None:
+    client = TestClient(app)
+    wav = make_wav_bytes(5.0)
+
+    # 1. Test POST /api/v1/analyze/audio with "file" form field (Next.js dashboard contract)
+    res = client.post(
+        "/api/v1/analyze/audio",
+        files={"file": ("test.wav", wav, "audio/wav")},
+    )
+    assert res.status_code == 200, f"Analysis failed: {res.text}"
+    data = res.json()
+    assert data["status"] == "success"
+    assert "overall_risk_score" in data
+    assert "verdict" in data
+    assert "windows" in data
+    assert len(data["windows"]) > 0
+    assert "dpdp_compliance" in data
+    assert data["dpdp_compliance"]["zero_retention_verified"] is True
+    assert data["dpdp_compliance"]["receipt_sha256"]
+
+    # 2. Test POST /v1/analyze with "audio" form field (backward compatibility)
+    res2 = client.post(
+        "/v1/analyze",
+        files={"audio": ("test2.wav", wav, "audio/wav")},
+    )
+    assert res2.status_code == 200, f"Legacy analysis failed: {res2.text}"
+    data2 = res2.json()
+    assert "calibrated_risk" in data2
+    assert "tier" in data2
+    assert "breakdown" in data2
+
+
 def main() -> int:
     try:
         test_websocket_stream_e2e()
-        print("PASS: test_websocket_stream_e2e succeeded")
+        test_rest_health_endpoint()
+        test_rest_analyze_endpoint()
+        print("PASS: all stream and REST endpoint tests succeeded")
         return 0
     except Exception as exc:
         print(f"FAIL: {exc}")
