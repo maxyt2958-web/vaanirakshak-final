@@ -1,4 +1,4 @@
-﻿<!-- BEGIN:nextjs-agent-rules -->
+<!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
 
@@ -21,3 +21,4 @@ VaniRakshak is a target-conditioned recorded-audio forensic system that streams 
 ## 3. Git & Hygiene
 - Keep `.opencode/`, `.workbuddy-ai/`, `.venv/`, and audio datasets out of git.
 - Adhere to `CONTRIBUTING.md` for branch naming, PR syncs, and verification steps.
+- **Push Target**: When requested to push code, always push to `https://github.com/BeastAyyG/VaniRakshak` (remote `upstream`).
