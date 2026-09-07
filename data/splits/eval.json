@@ -1,0 +1,20 @@
+{
+  "split": "eval",
+  "count": 2,
+  "files": [
+    {
+      "id": "demo_04_impostor.wav",
+      "path": "data\\demo\\demo_04_impostor.wav",
+      "label": "spoof",
+      "is_clone": false,
+      "is_spliced": false
+    },
+    {
+      "id": "demo_01_genuine.wav",
+      "path": "data\\demo\\demo_01_genuine.wav",
+      "label": "genuine",
+      "is_clone": false,
+      "is_spliced": false
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "timestamp_iso": "2026-09-07T19:16:06Z",
+  "total_benchmark_duration_sec": 19.8,
+  "asvspoof5": {
+    "min_dcf": 0.0,
+    "act_dcf": 18.999999999999996,
+    "cllr": 1.8312256289543065,
+    "eer": 0.0,
+    "minDCF": 0.0,
+    "actDCF": 18.999999999999996,
+    "CLLR": 1.8312256289543065,
+    "EER": 0.0,
+    "threshold_eer": 2.935396253733079,
+    "threshold_mindcf": 2.935396253733079,
+    "threshold_actdcf": 0.5
+  },
+  "latency_sla": {
+    "p50_ms": 18.63365000099293,
+    "p95_ms": 22.7791450024597,
+    "p99_ms": 23.995232999004653,
+    "mean_ms": 19.055122999925516,
+    "sla_threshold_p95_ms": 200.0,
+    "compliant": true
+  },
+  "telephony_robustness": {
+    "Clean (Broadband)": {
+      "EER_pct": 0.0,
+      "minDCF": 0.0
+    },
+    "G.711 A-law": {
+      "EER_pct": 0.0,
+      "minDCF": 0.0
+    },
+    "G.711 mu-law": {
+      "EER_pct": 0.0,
+      "minDCF": 0.0
+    },
+    "AMR-WB (VoLTE)": {
+      "EER_pct": 0.5,
+      "minDCF": 1.0
+    },
+    "GSM-EFR (2G)": {
+      "EER_pct": 1.0,
+      "minDCF": 1.0
+    },
+    "Noise (15dB SNR)": {
+      "EER_pct": 0.0,
+      "minDCF": 0.0
+    }
+  },
+  "demo_verification": {
+    "demo_01_genuine.wav": {
+      "risk": 46.3,
+      "tier": "CHALLENGE",
+      "expected": "AUTHENTIC_TARGET",
+      "windows": 6
+    },
+    "demo_02_full_clone.wav": {
+      "risk": 46.2,
+      "tier": "CHALLENGE",
+      "expected": "SYNTHETIC_VOICE_CLONE",
+      "windows": 6
+    },
+    "demo_03_partial_splice.wav": {
+      "risk": 46.2,
+      "tier": "CHALLENGE",
+      "expected": "SUSPICIOUS_SPLICED_AUDIO",
+      "windows": 6
+    },
+    "demo_04_impostor.wav": {
+      "risk": 48.0,
+      "tier": "CHALLENGE",
+      "expected": "IMPOSTOR_SPEAKER",
+      "windows": 6
+    }
+  }
+}

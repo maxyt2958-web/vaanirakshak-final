@@ -1,0 +1,20 @@
+{
+  "split": "train",
+  "count": 2,
+  "files": [
+    {
+      "id": "demo_03_partial_splice.wav",
+      "path": "data\\demo\\demo_03_partial_splice.wav",
+      "label": "spoof",
+      "is_clone": false,
+      "is_spliced": true
+    },
+    {
+      "id": "demo_02_full_clone.wav",
+      "path": "data\\demo\\demo_02_full_clone.wav",
+      "label": "spoof",
+      "is_clone": true,
+      "is_spliced": false
+    }
+  ]
+}
