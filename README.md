@@ -19,6 +19,27 @@ Microphone  →  16-bit PCM @ 16 kHz  →  WebSocket /ws/stream  →  Forensic b
                                                     ALLOW / CHALLENGE / BLOCK
 ```
 
+```mermaid
+flowchart LR
+    A["Raw 16 kHz PCM<br/>sliding audio window"] --> B["CM anti-spoofing<br/>AASIST stub"]
+    A --> C["ASV speaker verification<br/>ECAPA-TDNN stub"]
+    A --> D["Channel & codec detector"]
+    A --> E["Prosody micro-tremor detector"]
+    B --> B1["CM score & genuine prob"]
+    C --> C1["ASV consistency"]
+    D --> D1["Channel anomaly & SNR"]
+    E --> E1["Prosody unnaturalness"]
+    B1 --> F["Calibrated Bayesian fusion<br/>sigmoid + EMA"]
+    C1 --> F
+    D1 --> F
+    E1 --> F
+    G["Context risk<br/>country, amount, prior fraud"] --> F
+    F --> H["Risk score (0-100)<br/>fast-rise override"]
+    H --> I{"ALLOW, CHALLENGE<br/>or BLOCK"}
+```
+
+> **Architecture Diagrams:** Detailed interactive flowcharts are available in [docs/FLOWCHARTS_CORRECTED.md](docs/FLOWCHARTS_CORRECTED.md) and viewable in your browser at [docs/flowcharts.html](docs/flowcharts.html).
+
 | Risk score | Label | Action |
 |---|---|---|
 | `< 35` | LOW RISK | `ALLOW` — transaction proceeds |
