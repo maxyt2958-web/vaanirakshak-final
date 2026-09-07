@@ -61,8 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
     if not hasattr(args, "func"):
-        p.print_help()
-        return 1
+        return cmd_serve(argparse.Namespace(host=None, port=None, reload=False))
     return int(args.func(args) or 0)
 
 

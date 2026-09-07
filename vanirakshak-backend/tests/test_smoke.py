@@ -182,15 +182,33 @@ def test_mindcf_harness_runs() -> None:
     # import the harness
     import importlib.util
     from pathlib import Path
-    repo = Path(__file__).resolve().parents[2]
-    harness_path = repo / "benchmarks" / "compute_mindcf.py"
+    harness_path = Path(__file__).resolve().parent.parent / "benchmarks" / "compute_mindcf.py"
+    if not harness_path.is_file():
+        harness_path = Path(__file__).resolve().parents[2] / "benchmarks" / "compute_mindcf.py"
     spec = importlib.util.spec_from_file_location("compute_mindcf", harness_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError("could not load minDCF harness")
+        raise RuntimeError(f"could not load minDCF harness from {harness_path}")
     harness = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(harness)
     res = harness.evaluate_system(np.array(bon), np.array(spf))
     assert_(0.0 <= res["minDCF"] <= 1.0, f"minDCF in [0,1] = {res['minDCF']:.3f}")
+
+
+def test_route_aliases() -> None:
+    print("[test] /v1/... and /api/v1/... route aliases succeed")
+    from fastapi.testclient import TestClient
+    from vanirakshak.server.app import app
+    client = TestClient(app)
+    r1 = client.get("/v1/health")
+    r2 = client.get("/api/v1/health")
+    assert_(r1.status_code == 200, f"/v1/health status {r1.status_code}")
+    assert_(r2.status_code == 200, f"/api/v1/health status {r2.status_code}")
+    assert_(r1.json() == r2.json(), "/v1/health and /api/v1/health payloads differ")
+
+    r3 = client.get("/v1/audit")
+    r4 = client.get("/api/v1/audit")
+    assert_(r3.status_code == 200, f"/v1/audit status {r3.status_code}")
+    assert_(r4.status_code == 200, f"/api/v1/audit status {r4.status_code}")
 
 
 def main() -> int:
@@ -203,6 +221,7 @@ def main() -> int:
         test_session_end_to_end,
         test_alaw_round_trip,
         test_mindcf_harness_runs,
+        test_route_aliases,
     ]
     t0 = time.time()
     for t in tests:

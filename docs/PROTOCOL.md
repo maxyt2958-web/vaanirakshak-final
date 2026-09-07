@@ -36,7 +36,7 @@ posts float32 blocks that the client converts to int16 before sending.
 
 ## 3. Verdict messages (server → client)
 
-Emitted once per analysis window (1.5 s sliding).
+Emitted once per analysis window (4.04 s sliding window, 1.0 s hop).
 
 ```json
 {
@@ -132,6 +132,7 @@ carries `risk_score`, `p_spoof`, `tier`, `metrics`, `interlock_active` plus
 side of this contract:
 
 ```bash
-python -m uvicorn vanirakshak.server.app:app --port 8000 &
+pytest vanirakshak-backend/tests/test_stream_e2e.py
+# Or run standalone:
 python vanirakshak-backend/tests/test_stream_e2e.py
 ```

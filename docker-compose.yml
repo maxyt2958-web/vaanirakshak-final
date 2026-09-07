@@ -4,7 +4,7 @@ services:
   backend:
     build:
       context: ./vanirakshak-backend
-      dockerfile: ../backend/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -18,9 +18,10 @@ services:
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3001:3001"
     environment:
-      - NEXT_PUBLIC_BACKEND_WS=ws://backend:8000/ws/stream
+      - NEXT_PUBLIC_BACKEND_WS=ws://localhost:8000/ws/stream
     depends_on:
       - backend

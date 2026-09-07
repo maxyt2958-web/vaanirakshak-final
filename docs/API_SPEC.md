@@ -1,4 +1,4 @@
-﻿# VaniRakshak — API Specification
+# VaniRakshak — API Specification
 
 ## WebSocket API
 
@@ -10,7 +10,7 @@ Real-time forensic analysis endpoint. Full contract in [PROTOCOL.md](PROTOCOL.md
 1. Client opens WebSocket to `ws://<host>:8000/ws/stream`
 2. Client sends JSON text handshake (must be first frame)
 3. Client streams binary 16-bit mono PCM frames at 16 kHz
-4. Server responds with JSON verdict messages per analysis window (1.5s sliding)
+4. Server responds with JSON verdict messages per analysis window (4.04s sliding window, 1.0s hop)
 
 ### Handshake Schema
 

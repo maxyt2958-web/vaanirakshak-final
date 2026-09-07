@@ -37,6 +37,7 @@ ENV/
 *.m4a
 *.flac
 !data/demo/*.wav
+!frontend/public/demo/*.wav
 
 # Misc
 .DS_Store

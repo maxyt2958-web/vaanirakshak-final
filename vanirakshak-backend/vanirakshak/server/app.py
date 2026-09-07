@@ -131,11 +131,13 @@ class ChallengeGradeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.get("/v1/health")
+@app.get("/api/v1/health")
 def health() -> dict:
     return {"ok": True, "version": app.version, "active_sessions": len(SESSIONS)}
 
 
 @app.post("/v1/enroll", response_model=EnrollResponse)
+@app.post("/api/v1/enroll", response_model=EnrollResponse)
 async def enroll(user_id: str = Form(...), audio: UploadFile = File(...)) -> EnrollResponse:
     data = await audio.read()
     x, sr = _read_wav_bytes(data)
@@ -156,6 +158,7 @@ async def enroll(user_id: str = Form(...), audio: UploadFile = File(...)) -> Enr
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
+@app.post("/api/v1/analyze", response_model=AnalyzeResponse)
 async def analyze(
     audio: UploadFile = File(...),
     caller_id: str = Form("+91-0000000000"),
@@ -197,6 +200,7 @@ async def analyze(
 
 
 @app.post("/v1/sessions")
+@app.post("/api/v1/sessions")
 def start_session(req: SessionStartRequest) -> dict:
     sid = f"call-{uuid.uuid4().hex[:10]}"
     SESSIONS[sid] = CallSession(
@@ -213,6 +217,7 @@ def start_session(req: SessionStartRequest) -> dict:
 
 
 @app.post("/v1/sessions/{sid}/challenge")
+@app.post("/api/v1/sessions/{sid}/challenge")
 def grade_challenge(sid: str, req: ChallengeGradeRequest) -> dict:
     sess = SESSIONS.get(sid)
     if sess is None:
@@ -221,6 +226,7 @@ def grade_challenge(sid: str, req: ChallengeGradeRequest) -> dict:
 
 
 @app.get("/v1/audit")
+@app.get("/api/v1/audit")
 def tail_audit(n: int = 50) -> dict:
     events = AUDIT.tail(n)
     return {
@@ -230,6 +236,7 @@ def tail_audit(n: int = 50) -> dict:
 
 
 @app.websocket("/v1/stream")
+@app.websocket("/api/v1/stream")
 @app.websocket("/ws/stream")
 async def stream_endpoint(ws: WebSocket) -> None:
     await ws.accept()
