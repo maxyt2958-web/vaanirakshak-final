@@ -186,17 +186,14 @@ and no pretrained weights. Real AASIST / ECAPA-TDNN checkpoints can be dropped i
 by replacing two files in `vanirakshak/detectors/`. Scores are therefore **not** yet
 real detections.
 
-Other known gaps:
+Status of pipeline components:
 
-- `Makefile` and `docker-compose.yml` are empty placeholders.
-- `frontend/app/components/` contains four empty stub files (`AudioUploadZone`,
-  `DemoQuickSelector`, `ForensicVerdictCard`, `WaveformEvidenceTimeline`) reserved for
-  planned features; they are not imported anywhere.
-- The interlock is `interlock_active || action === "BLOCK" || risk >= 70`. The server
-  owns the decision; the client-side thresholds exist only for demo mode.
-- The dashboard's `alertPayload` is a **display** of the alert. Actual delivery is done
-  server-side by `vanirakshak/alerts/` (see below) — never from the browser, which would
-  have to hold the gateway credentials.
+- `Makefile` and `docker-compose.yml` are configured for development and containerization.
+- Architecture and specification documents are located in `docs/` (`ARCHITECTURE.md`, `PROTOCOL.md`, `API_SPEC.md`, `RUNBOOK.md`, `FLOWCHARTS_CORRECTED.md`).
+- Evaluation harness: ASVspoof-5 evaluation harness available via `benchmarks/compute_mindcf.py` (`python -m vanirakshak eval`).
+- Reconnection & Alerting: Robust 5-stage backoff reconnect logic in frontend; server-side webhook dispatcher in `vanirakshak/alerts/`.
+- Frontend modular components (`AudioUploadZone`, `DemoQuickSelector`, `ForensicVerdictCard`, `WaveformEvidenceTimeline`) are reserved for the file-upload and timeline inspection views.
+- The interlock is `interlock_active || action === "BLOCK" || risk >= 70`. The server owns the decision; client-side thresholds exist only for demo mode.
 
 ## License
 

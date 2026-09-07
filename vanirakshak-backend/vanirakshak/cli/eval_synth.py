@@ -37,6 +37,7 @@ from vanirakshak.detectors.pipeline import DetectionPipeline  # noqa: E402
 
 def _load_metric_harness():
     candidates = [
+        _PKG_PARENT / "benchmarks" / "compute_mindcf.py",
         _REPO / "benchmarks" / "compute_mindcf.py",
     ]
     for c in candidates:
@@ -74,7 +75,7 @@ def run_eval(n_bonafide: int = 80, n_spoof: int = 80, sr: int = 16000, seed: int
 
     res = harness.evaluate_system(np.array(bonafide_scores), np.array(spoof_scores))
     harness.print_metrics(res)
-    print("\n⚠️  Honest caveat: this is a SYNTHETIC eval using stub detectors.")
+    print("\n[WARNING] Honest caveat: this is a SYNTHETIC eval using stub detectors.")
     print("   The metric formulas are official ASVspoof 5; the scores themselves")
     print("   are not representative of any trained model. Use this only to")
     print("   verify the harness is wired up correctly end-to-end.")

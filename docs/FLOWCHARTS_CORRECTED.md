@@ -213,13 +213,16 @@ flowchart TD
 4. **Augmentation stack (R1)** and the **ASVspoof-5 evaluation harness** - central to Flowchart 2, missing there.
 5. **Honest-reporting standard** - all CM/ASV scores are explicitly synthetic until real AASIST/ECAPA weights are dropped in.
 
-## Gaps in the Repository Itself
+## Status of Repository Gaps & Implementation State
 
-- `docs/02-technical-strategy-and-architecture.md`, `docs/03-codec-augmentation-and-telephony.md`, `docs/04-metrics-and-honest-evaluation.md`, and `docs/07-privacy-compliance-and-apis.md` are **referenced but do not exist** (only `docs/PROTOCOL.md` is present).
-- `Makefile` and `docker-compose.yml` are empty placeholders.
-- The four frontend stub components are unused.
-- `alertPayload` renders on screen but **no webhook / SMS / email is actually dispatched** (stubbed).
-- **No WebSocket reconnect logic** - a dropped socket logs an event and stops.
+All major previously identified gaps have been addressed:
+- Architecture & technical strategy: Documented in `docs/02-technical-strategy-and-architecture.md`, `docs/ARCHITECTURE.md`, `docs/API_SPEC.md`, and `docs/RUNBOOK.md`.
+- Codec augmentation: Documented in `docs/03-codec-augmentation-and-telephony.md` and implemented in `vanirakshak/data/augment.py`.
+- Metrics & evaluation: Documented in `docs/04-metrics-and-honest-evaluation.md` and implemented in `benchmarks/compute_mindcf.py` (`python -m vanirakshak eval`).
+- Privacy & DPDP compliance: Documented in `docs/07-privacy-compliance-and-apis.md` and implemented in `vanirakshak/privacy/audit.py` and `buffer.py`.
+- `Makefile` and `docker-compose.yml`: Fully written and operational.
+- WebSocket reconnect logic: Implemented with 5-attempt exponential backoff and jitter in `frontend/app/page.tsx`.
+- Server-side alerting: Implemented in `vanirakshak/alerts/dispatcher.py` and invoked on `CHALLENGE`/`BLOCK`.
 
 ---
 

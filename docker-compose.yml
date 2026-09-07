@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./vanirakshak-backend
+      dockerfile: ../backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - VR_HOST=0.0.0.0
+      - VR_PORT=8000
+      - VR_CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+    volumes:
+      - ./vanirakshak-backend:/app
+    command: python run.py
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_BACKEND_WS=ws://backend:8000/ws/stream
+    depends_on:
+      - backend
