@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Activity, Volume2, Flag, Info } from "lucide-react";
+import { Play, Pause, RotateCcw, Volume2, Flag, Info } from "lucide-react";
 
 export interface WindowResult {
   window_index: number;
@@ -37,8 +37,6 @@ export default function WaveformEvidenceTimeline({
   durationSec,
   windows,
   detectedBoundaryTimestamps = [],
-  verdict,
-  overallRiskScore = 0,
 }: WaveformEvidenceTimelineProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -47,27 +45,29 @@ export default function WaveformEvidenceTimeline({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const internalAudioUrlRef = useRef<string | null>(null);
 
-  const resolvedAudioSrc = React.useMemo(() => {
-    if (audioBlob) {
-      if (internalAudioUrlRef.current) {
-        URL.revokeObjectURL(internalAudioUrlRef.current);
-      }
-      const url = URL.createObjectURL(audioBlob);
-      internalAudioUrlRef.current = url;
-      return url;
-    }
-    return audioUrl || null;
-  }, [audioBlob, audioUrl]);
+  const hasAudio = Boolean(audioUrl || audioBlob);
 
   useEffect(() => {
-    return () => {
-      if (internalAudioUrlRef.current) {
-        URL.revokeObjectURL(internalAudioUrlRef.current);
-      }
-    };
-  }, []);
+    const audioElement = audioRef.current;
+    if (!audioElement) return;
+
+    if (audioBlob) {
+      const url = URL.createObjectURL(audioBlob);
+      audioElement.src = url;
+      return () => {
+        URL.revokeObjectURL(url);
+        audioElement.removeAttribute("src");
+      };
+    } else if (audioUrl) {
+      audioElement.src = audioUrl;
+      return () => {
+        audioElement.removeAttribute("src");
+      };
+    } else {
+      audioElement.removeAttribute("src");
+    }
+  }, [audioBlob, audioUrl]);
 
   const handleTimeUpdate = () => {
     if (!audioRef.current) return;
@@ -208,15 +208,12 @@ export default function WaveformEvidenceTimeline({
 
   return (
     <div className="rounded-xl border border-white/[0.08] bg-[#0c0c0c] p-6 shadow-sm">
-      {resolvedAudioSrc && (
-        <audio
-          ref={audioRef}
-          src={resolvedAudioSrc}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleEnded}
-          preload="auto"
-        />
-      )}
+      <audio
+        ref={audioRef}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        preload="auto"
+      />
 
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-white/[0.06] pb-4">
@@ -243,7 +240,7 @@ export default function WaveformEvidenceTimeline({
 
           <button
             onClick={togglePlay}
-            disabled={!resolvedAudioSrc}
+            disabled={!hasAudio}
             className="flex items-center gap-1.5 rounded-full bg-white text-black px-4 py-1.5 text-xs font-medium transition hover:bg-neutral-200 active:scale-95 cursor-pointer disabled:opacity-40"
           >
             {isPlaying ? <Pause className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current" />}
@@ -252,7 +249,7 @@ export default function WaveformEvidenceTimeline({
 
           <button
             onClick={restartAudio}
-            disabled={!resolvedAudioSrc}
+            disabled={!hasAudio}
             className="rounded-full border border-white/[0.1] bg-[#141414] p-2 text-[#a1a1a1] hover:text-white transition active:scale-95 cursor-pointer disabled:opacity-40"
             title="Restart playback"
           >

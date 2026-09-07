@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { UploadCloud, FileAudio, Loader2, ShieldCheck } from "lucide-react";
+import { FileAudio, Loader2, ShieldCheck } from "lucide-react";
 
 interface AudioUploadZoneProps {
   onFileSelected: (file: File) => void;
